@@ -1,0 +1,11 @@
+{
+  "names": [
+    "apple",
+    "banana",
+    "orange"
+  ],
+  "imgsz": 640,
+  "task": "detect",
+  "source_model": "models\\yolo_product_detector.pt",
+  "source_onnx": "models\\yolo_product_detector.onnx"
+}

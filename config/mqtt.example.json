@@ -1,0 +1,16 @@
+{
+  "host": "127.0.0.1",
+  "port": 1883,
+  "topic": "smart-cat/lubancat3_demo_001/transactions",
+  "runtime_config_topic": "smart-cat/lubancat3_demo_001/runtime-config",
+  "device_policy_topic": "smart-cat/lubancat3_demo_001/device-policy",
+  "device_event_topic": "smart-cat/lubancat3_demo_001/device-events",
+  "voice_command_topic": "smart-cat/lubancat3_demo_001/voice-commands",
+  "client_id": "smart-cat-lubancat3-demo-001",
+  "username": "",
+  "password": "",
+  "qos": 1,
+  "retain": false,
+  "keepalive": 60,
+  "connect_timeout": 10
+}

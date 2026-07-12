@@ -1,0 +1,49 @@
+# Python / local environment
+.venv/
+**/.venv/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+**/.pytest_cache/
+
+# Runtime outputs and local records
+outputs/*
+!outputs/.gitkeep
+**/outputs/*
+!**/outputs/.gitkeep
+
+records/*
+!records/.gitkeep
+**/records/*
+!**/records/.gitkeep
+
+# Local runtime config may contain broker credentials, device ids or calibration values.
+config/*.json
+!config/*.example.json
+**/config/*.json
+!**/config/*.example.json
+
+# Model weights and conversion artifacts are too large for normal GitHub commits.
+models/*
+!models/.gitkeep
+!models/*.labels.json
+**/models/*
+!**/models/.gitkeep
+!**/models/*.labels.json
+*.pt
+*.onnx
+*.rknn
+
+# Training datasets and experiment outputs
+yolov11model-train/
+data/
+runs/
+yolov8*-cls.pt
+yolo11*-cls.pt
+
+# Course delivery package and private requirement notes
+交付材料/
+交付材料*.zip
+交付材料*.rar
+docs/考核要求.md

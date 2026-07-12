@@ -1,0 +1,42 @@
+{
+  "apple": {
+    "name": "苹果",
+    "unit": "斤",
+    "unit_price": 9.9,
+    "voice_name": "苹果",
+    "enabled": true,
+    "remark": "示例商品：用于本地跑通主流程，请按商户实际商品表替换。",
+    "price_history": [
+      {
+        "timestamp": "2026-01-01T00:00:00",
+        "old_price": null,
+        "new_price": 9.9,
+        "operator": "web_dashboard"
+      }
+    ],
+    "created_at": "2026-01-01T00:00:00",
+    "updated_at": "2026-01-01T00:00:00"
+  },
+  "banana": {
+    "name": "香蕉",
+    "unit": "斤",
+    "unit_price": 6.8,
+    "voice_name": "香蕉",
+    "enabled": true,
+    "remark": "示例商品：用于本地跑通主流程。",
+    "price_history": [],
+    "created_at": "2026-01-01T00:00:00",
+    "updated_at": "2026-01-01T00:00:00"
+  },
+  "orange": {
+    "name": "橙子",
+    "unit": "斤",
+    "unit_price": 7.8,
+    "voice_name": "橙子",
+    "enabled": true,
+    "remark": "示例商品：用于本地跑通主流程。",
+    "price_history": [],
+    "created_at": "2026-01-01T00:00:00",
+    "updated_at": "2026-01-01T00:00:00"
+  }
+}

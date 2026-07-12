@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Smart-Cat 控制台 | 边缘智能称重识别</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <!-- 顶部导航 / 命令中心头部 -->
+  <header class="app-header">
+    <div class="header-glow"></div>
+    <div class="header-bar">
+      <div class="header-brand">
+        <div>
+          <h1>Smart-Cat <span class="header-sub">边缘智能称重识别控制台</span></h1>
+          <div class="subhead" id="lastUpdated">等待数据同步...</div>
+        </div>
+      </div>
+      <div class="sync" id="syncStatus"><span class="dot"></span><span>同步状态读取中</span></div>
+    </div>
+  </header>
+  <main>
+    <!-- 主工具栏 -->
+    <div class="toolbar">
+      <div class="toolbar-title">
+        <h2>实时监控</h2>
+        <p class="muted">管理设备交易流水、商品配置与智能识别策略</p>
+      </div>
+      <div class="toolbar-actions">
+        <button id="autoRefreshBtn" class="btn-ghost">自动刷新：开</button>
+        <button class="primary" id="refreshBtn">
+          <span class="material-symbols-outlined">refresh</span> 立即刷新
+        </button>
+      </div>
+    </div>
+    <!-- 导航标签 -->
+    <div class="tabs">
+      <button class="tab-btn active" data-page="dashboardPage">监控概览</button>
+      <button class="tab-btn" data-page="runtimePage">运行参数</button>
+      <button class="tab-btn" data-page="policyPage">设备策略</button>
+      <button class="tab-btn" data-page="eventsPage">设备事件</button>
+      <button class="tab-btn" data-page="voicePage">语音补盲</button>
+    </div>
+    <!-- 页面：监控概览 -->
+    <div class="page active" id="dashboardPage">
+      <!-- 指标卡片网格 -->
+      <div class="grid metric-grid">
+        <div class="metric glass-card">
+          <div class="metric-head">
+            <label>当日交易数</label>
+            <div class="metric-icon icon-teal"><span class="material-symbols-outlined">receipt_long</span></div>
+          </div>
+          <strong id="mCount">0</strong>
+          <div class="metric-foot hint-ok"><span class="material-symbols-outlined sm">trending_up</span> 实时累计</div>
+        </div>
+        <div class="metric glass-card">
+          <div class="metric-head">
+            <label>总销售额</label>
+            <div class="metric-icon icon-blue"><span class="material-symbols-outlined">payments</span></div>
+          </div>
+          <strong id="mSales">0</strong>
+          <div class="metric-foot muted">基于实时计价引擎</div>
+        </div>
+        <div class="metric glass-card">
+          <div class="metric-head">
+            <label>累计重量</label>
+            <div class="metric-icon icon-amber"><span class="material-symbols-outlined">scale</span></div>
+          </div>
+          <strong id="mWeight">0g</strong>
+          <div class="metric-foot muted">传感器精度 ±0.5g</div>
+        </div>
+        <div class="metric glass-card metric-alert">
+          <div class="shimmer-alert"></div>
+          <div class="metric-inner">
+            <div class="metric-head">
+              <label>待确认 / 异常</label>
+              <div class="metric-icon icon-rose"><span class="material-symbols-outlined">error</span></div>
+            </div>
+            <strong id="mPending" class="text-rose">0</strong>
+            <div class="metric-foot hint-bad">需人工干预</div>
+          </div>
+        </div>
+      </div>
+      <!-- 数据分析区 -->
+      <div class="analytics">
+        <section class="analytics-panel glass-card">
+          <div class="panel-head">
+            <h2>近7天销售趋势</h2>
+          </div>
+          <div class="trend" id="salesTrend"></div>
+        </section>
+        <section class="analytics-panel glass-card">
+          <h2>商品销量排行</h2>
+          <div class="rank-list" id="productRanking"></div>
+        </section>
+        <section class="analytics-panel glass-card">
+          <h2>识别质量</h2>
+          <div class="quality-grid" id="recognitionQuality"></div>
+        </section>
+      </div>
+      <!-- 主体布局：流水表 + 侧栏 -->
+      <div class="layout">
+      <section class="glass-card transaction-panel">
+        <div class="panel-head panel-head-row">
+          <h2>实时交易流水</h2>
+          <div class="panel-actions">
+            <button id="exportCsvBtn" class="btn-soft">
+              <span class="material-symbols-outlined sm">download</span> 导出CSV
+            </button>
+            <button class="danger" id="clearTransactionsBtn" type="button">清空流水</button>
+          </div>
+        </div>
+        <div class="filters">
+          <div class="field">
+            <label for="filterStart">开始日期</label>
+            <input type="date" id="filterStart">
+          </div>
+          <div class="field">
+            <label for="filterEnd">结束日期</label>
+            <input type="date" id="filterEnd">
+          </div>
+          <div class="field">
+            <label for="filterProduct">商品</label>
+            <select id="filterProduct">
+              <option value="">全部商品</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="filterStatus">状态</label>
+            <select id="filterStatus">
+              <option value="">全部状态</option>
+              <option value="accepted">已识别</option>
+              <option value="low_confidence">低置信度</option>
+              <option value="needs_confirm">待确认</option>
+              <option value="manually_confirmed">已确认</option>
+              <option value="unknown">未知</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="filterLimit">显示数量</label>
+            <select id="filterLimit">
+              <option value="50">50</option>
+              <option value="100" selected>100</option>
+              <option value="200">200</option>
+              <option value="500">500</option>
+            </select>
+          </div>
+          <div class="actions">
+            <button id="applyFiltersBtn" class="primary">筛选</button>
+            <button id="resetFiltersBtn">重置</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="transaction-table">
+            <thead>
+              <tr>
+                <th>时间</th>
+                <th>状态</th>
+                <th>商品</th>
+                <th>置信度</th>
+                <th>重量</th>
+                <th>总价</th>
+                <th>语音文本</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="recordRows"></tbody>
+          </table>
+        </div>
+      </section>
+      <section class="side-section">
+        <div class="side-body">
+          <!-- 设备实时状态卡片 -->
+          <div class="device-card device-card-dark">
+            <div class="device-head">
+              <h2><span class="material-symbols-outlined icon-teal-glow">sensors</span> 设备实时状态</h2>
+              <span class="device-state" id="deviceOnline"><span class="dot"></span><span>读取中</span></span>
+            </div>
+            <div class="kv" id="deviceStatus"></div>
+          </div>
+          <!-- 商品档案管理 -->
+          <div class="product-panel glass-card">
+            <h2 class="panel-title"><span class="material-symbols-outlined text-primary">inventory_2</span> 商品档案</h2>
+            <div class="product-list" id="productList"></div>
+            <div class="product-tools">
+              <button id="addProductBtn" class="btn-soft">新增商品</button>
+              <button class="primary" id="saveProductsBtn">保存配置</button>
+              <span class="message" id="productMsg"></span>
+            </div>
+          </div>
+        </div>
+      </section>
+      </div>
+    </div>
+    <!-- 页面：运行参数 -->
+    <div class="page" id="runtimePage">
+      <section class="glass-card runtime-card">
+        <div class="panel-head panel-head-row">
+          <div>
+            <h2>系统运行参数</h2>
+            <p class="muted">控制边缘识别引擎的核心技术参数</p>
+          </div>
+          <span class="badge-primary" id="runtimeMsg"></span>
+        </div>
+        <div class="runtime-status" id="runtimeStatus"></div>
+        <div class="runtime-section">
+          <h3><span class="material-symbols-outlined sm">settings_input_component</span> 核心识别配置</h3>
+          <div class="runtime-grid">
+            <div class="field wide">
+              <label for="cfgDeviceId">设备全局ID</label>
+              <input id="cfgDeviceId" class="mono">
+            </div>
+            <div class="field">
+              <label for="cfgAcceptConfidence">识别置信度阈值</label>
+              <input id="cfgAcceptConfidence" type="number" min="0" max="1" step="0.01">
+            </div>
+            <div class="field">
+              <label for="cfgConfirmGap">Top1/Top2 差值</label>
+              <input id="cfgConfirmGap" type="number" min="0" max="1" step="0.01">
+            </div>
+            <div class="field">
+              <label for="cfgTopk">TopK 数量</label>
+              <input id="cfgTopk" type="number" min="1" max="10" step="1">
+            </div>
+          </div>
+        </div>
+        <div class="runtime-section">
+          <h3><span class="material-symbols-outlined sm">photo_camera</span> 传感器参数</h3>
+          <div class="runtime-grid">
+            <div class="field">
+              <label for="cfgCameraWidth">图像采集宽度 (px)</label>
+              <input id="cfgCameraWidth" type="number" min="320" max="3840" step="1">
+            </div>
+            <div class="field">
+              <label for="cfgCameraHeight">图像采集高度 (px)</label>
+              <input id="cfgCameraHeight" type="number" min="240" max="2160" step="1">
+            </div>
+          </div>
+        </div>
+        <div class="runtime-section">
+          <h3><span class="material-symbols-outlined sm">campaign</span> 交互与上报</h3>
+          <div class="runtime-grid">
+            <div class="field">
+              <label for="cfgTtsBackend">语音播报模块</label>
+              <select id="cfgTtsBackend">
+                <option value="syn6288">SYN6288 硬件串口</option>
+                <option value="mock">软件模拟输出</option>
+                <option value="none">静音模式</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="cfgTtsPort">语音串口</label>
+              <input id="cfgTtsPort" class="mono">
+            </div>
+            <div class="field">
+              <label for="cfgTtsVolume">语音音量</label>
+              <input id="cfgTtsVolume" type="number" min="0" max="16" step="1">
+            </div>
+            <div class="field">
+              <label for="cfgTtsSpeed">播报速度</label>
+              <input id="cfgTtsSpeed" type="number" min="0" max="5" step="1">
+            </div>
+            <label class="runtime-toggle"><input id="cfgMqttEnabled" type="checkbox">开启 MQTT 实时自动上报</label>
+            <label class="runtime-toggle"><input id="cfgMqttOptional" type="checkbox">允许 MQTT 上报失败时不阻塞交易</label>
+          </div>
+        </div>
+        <div class="product-tools">
+          <button class="primary btn-lg" id="saveRuntimeBtn">
+            <span class="material-symbols-outlined sm">rocket_launch</span> 下发并应用参数
+          </button>
+          <button class="btn-soft btn-lg" id="reloadRuntimeBtn">
+            <span class="material-symbols-outlined sm">cloud_sync</span> 同步云端
+          </button>
+        </div>
+      </section>
+    </div>
+    <!-- 页面：设备策略 -->
+    <div class="page" id="policyPage">
+      <div class="policy-layout">
+      <section class="glass-card runtime-card">
+        <div class="panel-head panel-head-row">
+          <div>
+            <h2>当前执行策略</h2>
+            <p class="muted">配置识别异常时的自动处理逻辑与计价模板</p>
+          </div>
+          <span class="message" id="policyMsg"></span>
+        </div>
+        <div class="runtime-status" id="policyStatus"></div>
+        <div class="runtime-section">
+          <h3><span class="material-symbols-outlined sm">verified_policy</span> 策略版本与动作</h3>
+          <div class="runtime-grid">
+            <div class="field">
+              <label for="policyVersion">策略版本号</label>
+              <input id="policyVersion" class="mono">
+            </div>
+            <div class="field">
+              <label for="policyEnabled">启用状态</label>
+              <select id="policyEnabled">
+                <option value="true">启用</option>
+                <option value="false">停用</option>
+              </select>
+            </div>
+            <div class="field wide">
+              <label for="policyDescription">策略备注</label>
+              <input id="policyDescription">
+            </div>
+            <div class="field">
+              <label for="lowConfidenceAction">低置信度动作</label>
+              <select id="lowConfidenceAction">
+                <option value="keep">保持识别结果</option>
+                <option value="accept">直接通过</option>
+                <option value="needs_confirm">进入待确认</option>
+                <option value="reject">暂停结算</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="unknownProductAction">未知商品动作</label>
+              <select id="unknownProductAction">
+                <option value="keep">保持未知状态</option>
+                <option value="needs_confirm">进入待确认</option>
+                <option value="reject">暂停结算</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="pricingMode">计价引擎模式</label>
+              <select id="pricingMode">
+                <option value="standard">按原单价计价</option>
+                <option value="discount_10_over_1000g">大重量九折优惠</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="runtime-section">
+          <h3><span class="material-symbols-outlined sm">record_voice_over</span> 语音播报模板</h3>
+          <div class="runtime-grid">
+            <div class="field wide">
+              <label for="voiceTemplate">正常成交模板</label>
+              <input id="voiceTemplate">
+            </div>
+            <div class="field wide">
+              <label for="confirmVoiceTemplate">待确认模板</label>
+              <input id="confirmVoiceTemplate">
+            </div>
+            <div class="field wide">
+              <label for="rejectVoiceTemplate">暂停结算模板</label>
+              <input id="rejectVoiceTemplate">
+            </div>
+          </div>
+        </div>
+        <div class="product-tools">
+          <button class="primary btn-lg" id="savePolicyBtn">
+            <span class="material-symbols-outlined sm">check_circle</span> 应用新版本策略
+          </button>
+          <button class="btn-soft" id="reloadPolicyBtn">
+            <span class="material-symbols-outlined sm">cloud_sync</span> 同步远程
+          </button>
+          <button class="danger" id="rollbackPolicyBtn">
+            <span class="material-symbols-outlined sm">undo</span> 回滚上一版
+          </button>
+        </div>
+      </section>
+      <section class="glass-card">
+        <div class="panel-head"><h2>策略变更记录</h2></div>
+        <div class="table-wrap">
+          <table class="policy-history-table">
+            <thead>
+              <tr>
+                <th>策略版本</th>
+                <th>修改时间</th>
+                <th>低置信度动作</th>
+                <th>计价模式</th>
+                <th>语音模板</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="policyHistoryRows"></tbody>
+          </table>
+        </div>
+      </section>
+      </div>
+    </div>
+    <!-- 页面：设备事件 -->
+    <div class="page" id="eventsPage">
+      <div class="grid metric-grid">
+        <div class="metric glass-card"><label>事件总数</label><strong id="eCount">0</strong></div>
+        <div class="metric glass-card"><label>策略应用次数</label><strong class="text-primary" id="ePolicyCount">0</strong></div>
+        <div class="metric glass-card"><label>最近策略版本</label><strong id="eLatestPolicy">暂无</strong></div>
+        <div class="metric glass-card"><label>最近事件时间</label><strong id="eLatestAt">暂无</strong></div>
+      </div>
+      <section class="glass-card">
+        <div class="panel-head panel-head-row">
+          <h2>系统事件审计日志</h2>
+          <div class="panel-actions">
+            <div class="field field-inline">
+              <label for="eventTypeFilter">事件类型</label>
+              <select id="eventTypeFilter">
+                <option value="">全部事件</option>
+                <option value="policy_applied">策略应用</option>
+                <option value="service_heartbeat">设备心跳</option>
+                <option value="service_state">服务状态</option>
+                <option value="voice_command_executed">语音补盲命令</option>
+              </select>
+            </div>
+            <div class="field field-inline">
+              <label for="eventLimit">显示数量</label>
+              <select id="eventLimit">
+                <option value="50">50</option>
+                <option value="100" selected>100</option>
+                <option value="200">200</option>
+              </select>
+            </div>
+            <button id="applyEventFiltersBtn" class="btn-soft">筛选事件</button>
+            <button class="danger" id="clearEventsBtn" type="button">
+              <span class="material-symbols-outlined sm">delete</span> 清空事件
+            </button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="event-table">
+            <thead>
+              <tr>
+                <th>时间</th>
+                <th>事件</th>
+                <th>设备</th>
+                <th>策略版本</th>
+                <th>交易ID</th>
+                <th>交易状态</th>
+                <th>计价模式</th>
+                <th>消息</th>
+              </tr>
+            </thead>
+            <tbody id="eventRows"></tbody>
+          </table>
+        </div>
+      </section>
+      <section class="analytics-panel glass-card">
+        <h2>策略应用版本分布</h2>
+        <div class="rank-list" id="policyVersionRanking"></div>
+      </section>
+    </div>
+    <!-- 页面：语音补盲 -->
+    <div class="page" id="voicePage">
+      <section class="glass-card voice-hero">
+        <h2>语音补盲辅助</h2>
+        <p class="muted">当识别受阻或需现场播报时，可通过以下快捷指令控制设备</p>
+        <div class="voice-command-grid">
+          <button class="voice-command-btn" data-voice-command="status">
+            <div class="voice-btn-icon"><span class="material-symbols-outlined">podcasts</span></div>
+            <strong>播报状态</strong><span>设备状态、当前重量、交易次数</span>
+          </button>
+          <button class="voice-command-btn" data-voice-command="weight">
+            <div class="voice-btn-icon"><span class="material-symbols-outlined">monitor_weight</span></div>
+            <strong>播报重量</strong><span>当前重量或最近交易重量</span>
+          </button>
+          <button class="voice-command-btn" data-voice-command="latest">
+            <div class="voice-btn-icon"><span class="material-symbols-outlined">history</span></div>
+            <strong>最近交易</strong><span>商品、状态、置信度、重量、总价</span>
+          </button>
+          <button class="voice-command-btn" data-voice-command="price">
+            <div class="voice-btn-icon"><span class="material-symbols-outlined">shopping_cart</span></div>
+            <strong>播报价格</strong><span>单价和总价</span>
+          </button>
+          <button class="voice-command-btn" data-voice-command="pending">
+            <div class="voice-btn-icon"><span class="material-symbols-outlined">question_mark</span></div>
+            <strong>是否待确认</strong><span>低置信度和待确认状态</span>
+          </button>
+          <button class="voice-command-btn" data-voice-command="help">
+            <div class="voice-btn-icon"><span class="material-symbols-outlined">live_help</span></div>
+            <strong>帮助</strong><span>播报可用命令</span>
+          </button>
+        </div>
+        <div class="voice-input-panel">
+          <input id="voiceIntentInput" placeholder="例如：这是苹果 / 改成番茄 / 播报价格">
+          <button id="startSpeechBtn" type="button" class="btn-soft" title="语音输入">语音输入</button>
+          <button id="runVoiceIntentBtn" class="primary" type="button">
+            <span class="material-symbols-outlined sm">play_arrow</span> 执行指令
+          </button>
+          <div class="voice-intent-result">
+            <div><strong>识别文本：</strong><span id="voiceIntentText">暂无</span></div>
+            <div><strong>解析结果：</strong><span id="voiceIntentParsed">暂无</span></div>
+            <div><strong>执行结果：</strong><span id="voiceIntentResult">暂无</span></div>
+          </div>
+        </div>
+        <div class="voice-result">
+          <div><strong>下发主题：</strong><span id="voiceCommandTopic">等待下发</span></div>
+          <div><strong>最近命令：</strong><span id="voiceCommandLast">暂无</span></div>
+          <span class="message" id="voiceCommandMsg"></span>
+        </div>
+      </section>
+    </div>
+  </main>
+  <!-- 交易详情弹窗 -->
+  <div class="modal-backdrop" id="detailModal">
+    <div class="modal">
+      <div class="modal-head">
+        <h3><span class="material-symbols-outlined text-primary">analytics</span> 交易详情分析</h3>
+        <button id="closeDetailBtn" class="btn-icon" title="关闭"><span class="material-symbols-outlined">close</span></button>
+      </div>
+      <div class="modal-body" id="detailBody"></div>
+    </div>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

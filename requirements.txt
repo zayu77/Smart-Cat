@@ -1,0 +1,15 @@
+# For local PC development.
+# On LubanCat/Debian, prefer system packages when possible:
+# sudo apt install -y python3-opencv python3-numpy
+numpy>=1.24
+opencv-python>=4.8
+PyYAML>=6.0
+
+# Optional, for YOLO classification training on the PC.
+ultralytics>=8.3
+
+# Optional, for SYN6288 UART TTS output.
+pyserial>=3.5
+
+# Optional, for MQTT transaction upload.
+paho-mqtt>=2.0

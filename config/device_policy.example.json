@@ -1,0 +1,11 @@
+{
+  "policy_version": "policy-v1.0.0",
+  "description": "默认策略：低置信度进入待确认，标准按斤计价。",
+  "enabled": true,
+  "low_confidence_action": "needs_confirm",
+  "unknown_product_action": "needs_confirm",
+  "pricing_mode": "standard",
+  "voice_template": "{product_name}，净重{weight_g}克，单价{unit_price}元每{unit}，总价{total_price}元。",
+  "confirm_voice_template": "请人工确认，识别为{product_name}，重量{weight_g}克。",
+  "reject_voice_template": "当前商品未能可靠识别，已暂停结算，请人工处理。"
+}
