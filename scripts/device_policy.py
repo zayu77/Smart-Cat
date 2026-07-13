@@ -150,7 +150,7 @@ def apply_policy_to_record(record: dict[str, Any], policy: dict[str, Any]) -> di
     elif action == "reject":
         record["status"] = "rejected"
 
-    if record["status"] != "accepted" or str(record.get("product_id") or "") == "unknown":
+    if record["status"] not in {"accepted", "memory_matched"} or str(record.get("product_id") or "") == "unknown":
         total_price = None
         pricing = {
             "mode": "pending_confirmation",

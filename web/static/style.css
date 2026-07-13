@@ -909,7 +909,7 @@ tbody tr:hover {
   background: var(--surface-container);
   color: var(--on-surface-variant);
 }
-.status.accepted, .status.manually_confirmed {
+.status.accepted, .status.manually_confirmed, .status.memory_matched {
   background: rgba(21, 128, 61, 0.12);
   color: var(--status-ok);
 }
@@ -1268,29 +1268,6 @@ input[type="checkbox"] { width: auto; }
   font-size: 14px;
   font-weight: 650;
 }
-.detail-media-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  min-width: 0;
-}
-.detail-media {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
-}
-.detail-media span {
-  color: var(--outline);
-  font-size: 12px;
-}
-.detail-media img {
-  width: 100%;
-  max-height: 360px;
-  object-fit: contain;
-  background: var(--header-navy);
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-}
 .confirm-form {
   border: 1px solid var(--line);
   background: rgba(251, 252, 253, 0.6);
@@ -1353,7 +1330,6 @@ pre {
   #eventsPage .panel-actions { justify-content: flex-start; margin-left: 0; }
   .subhead { display: none; }
   .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .detail-media-grid { grid-template-columns: 1fr; }
   .header-bar { padding: 14px 16px; }
   main { padding: 16px; }
 }

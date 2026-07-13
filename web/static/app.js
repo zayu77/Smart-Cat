@@ -7,6 +7,7 @@ let products = {};
     let latestRecords = [];
     const statusNames = {
       accepted: '已识别',
+      memory_matched: '记忆匹配',
       low_confidence: '低置信度',
       needs_confirm: '待确认',
       manually_confirmed: '已确认',
@@ -17,10 +18,6 @@ let products = {};
     function money(value) {
       const number = Number(value || 0);
       return number.toFixed(2).replace(/\\.00$/, '').replace(/0$/, '');
-    }
-
-    function mediaUrl(path) {
-      return path ? `/media?path=${encodeURIComponent(path)}` : '';
     }
 
     function statusClass(status) {
@@ -511,10 +508,12 @@ let products = {};
       const policy = record.policy || {};
       const original = policy.original || {};
       const pricing = record.pricing || {};
+      const memoryMatch = record.memory_match || {};
+      const productMemory = record.product_memory || {};
       const hasPolicy = Object.keys(policy).length > 0;
       const hasPricing = Object.keys(pricing).length > 0;
-      const sourceImage = record.source_image || '';
-      const previewImage = record.detection_preview_image || '';
+      const hasMemoryMatch = Object.keys(memoryMatch).length > 0;
+      const hasProductMemory = Object.keys(productMemory).length > 0;
       const productOptions = Object.entries(products).filter(([, item]) => item.enabled !== false).map(([id, item]) => {
         const selected = id === record.product_id ? 'selected' : '';
         return `<option value="${escapeHtml(id)}" data-price="${Number(item.unit_price || 0)}" ${selected}>${escapeHtml(item.name || id)} (${escapeHtml(id)})</option>`;
@@ -534,23 +533,27 @@ let products = {};
           <div><span>总价</span><strong>${record.total_price === undefined || record.total_price === null ? '待确认' : `${money(record.total_price)} 元`}</strong></div>
           <div><span>单价</span><strong>${money(record.unit_price)} 元/${escapeHtml(record.unit || '')}</strong></div>
           <div><span>修正次数</span><strong>${correctionCount}</strong></div>
+          <div><span>识别来源</span><strong>${record.recognition_source === 'product_memory' ? '商品记忆库' : record.recognition_source === 'manual_confirmation' ? '人工确认' : '检测模型'}</strong></div>
         </div>
-        ${sourceImage || previewImage ? `
-          <div class="detail-media-grid">
-            ${previewImage ? `
-              <div class="detail-media">
-                <span>检测图</span>
-                <img src="${mediaUrl(previewImage)}" alt="检测图">
-              </div>
-            ` : ''}
-            ${sourceImage ? `
-              <div class="detail-media">
-                <span>原图</span>
-                <img src="${mediaUrl(sourceImage)}" alt="原图">
-              </div>
-            ` : ''}
-          </div>
-        ` : ''}
+        <div class="detail-section">
+          <h4>商品记忆</h4>
+          ${hasMemoryMatch || hasProductMemory ? `
+            <div class="detail-grid">
+              ${hasMemoryMatch ? `
+                <div><span>匹配来源</span><strong>商品记忆库</strong></div>
+                <div><span>相似度</span><strong>${Number(memoryMatch.similarity || 0).toFixed(3)}</strong></div>
+                <div><span>相似度差值</span><strong>${Number(memoryMatch.similarity_gap || 0).toFixed(3)}</strong></div>
+                <div><span>记忆ID</span><strong>${escapeHtml(memoryMatch.memory_id || '')}</strong></div>
+              ` : ''}
+              ${hasProductMemory ? `
+                <div><span>记忆保存</span><strong>${productMemory.saved ? '已保存' : productMemory.binding === 'pending_edge_bind' ? '等待板端生成' : '保存失败'}</strong></div>
+                <div><span>保存ID</span><strong>${escapeHtml(productMemory.memory_id || '')}</strong></div>
+                <div><span>特征版本</span><strong>${escapeHtml(productMemory.feature_version || '')}</strong></div>
+                <div><span>绑定状态</span><strong>${escapeHtml(productMemory.message || productMemory.error || '无')}</strong></div>
+              ` : ''}
+            </div>
+          ` : '<span class="muted">暂无商品记忆记录。人工确认未知/待确认交易后，会自动写入商品记忆库。</span>'}
+        </div>
         <div class="detail-section">
           <h4>策略影响</h4>
           ${hasPolicy ? `

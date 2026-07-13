@@ -58,6 +58,8 @@ STATE_TEXT = {
 # 5 个交易状态的中文 TTS 标签：用于"最近交易"等命令的状态播报
 STATUS_TEXT = {
     "accepted": "已可靠识别",
+    "memory_matched": "商品记忆匹配",
+    "manually_confirmed": "已人工确认",
     "low_confidence": "低置信度",
     "needs_confirm": "需要人工确认",
     "unknown": "未知商品",

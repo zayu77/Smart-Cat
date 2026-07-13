@@ -12,12 +12,13 @@
 Web 后台：交易流水、筛选、详情、CSV 导出、商品维护、统计分析
 人工确认：低置信度/未知商品可在后台修正，重新计算总价并保留修正记录
 语音补盲：手机/Web 下发语音命令，支持商品修正和报价播报
+商品记忆库：未知商品经人工确认后，板端保存图片特征；下次相似商品可自动记忆匹配
 云边协同：运行参数和设备策略通过 MQTT retained 下发，设备事件回传
 策略管理：策略版本、低置信度动作、计价模式、语音模板、回滚记录
 模型部署：YOLO11 检测模型导出 ONNX 后转换为 RKNN，在 RK3576 NPU 推理
 ```
 
-当前检测模型自动识别 `apple`、`banana`、`orange`。其它商品先进入 `unknown / 待确认`，再通过 Web 后台或手机语音补盲修正为番茄、梨等商品。
+当前检测模型自动识别 `apple`、`banana`、`orange`。其它商品先进入 `unknown / 待确认`，再通过 Web 后台或手机语音补盲修正为番茄、梨等商品。修正时 Web 后台会通过 MQTT 下发 `bind_memory` 命令，板端使用本地交易图片生成 `records/product_memory.jsonl`；后续再次遇到相似商品时，可进入 `memory_matched` 状态并自动计价。
 
 ## 项目结构
 
@@ -246,6 +247,7 @@ http://127.0.0.1:8080
 设备策略配置、策略版本、策略历史和回滚
 设备事件日志与策略应用记录可视化
 语音补盲页面和手机语音输入修正
+商品记忆绑定状态与记忆匹配来源展示
 ```
 
 ## 语音补盲
@@ -282,6 +284,20 @@ smart-cat/lubancat3-demo-001/voice-commands
 ```
 
 商品修正会更新最近一笔交易，重新计算总价，记录修正前后信息，并通过 MQTT 下发 `speak_text` 让板端 SYN6288 播报修正后的报价。
+
+同时，商品修正会额外下发 `bind_memory` 命令。板端收到后读取本地交易原图，提取轻量图像特征并写入：
+
+```text
+records/product_memory.jsonl
+```
+
+后续如果 YOLO/RKNN 对某个商品输出 `unknown / low_confidence / needs_confirm`，板端会先查询商品记忆库。匹配成功时交易状态为：
+
+```text
+memory_matched
+```
+
+交易详情中会显示“识别来源：商品记忆库”、相似度、相似度差值和记忆 ID。
 
 ## MQTT 主题
 
@@ -359,6 +375,7 @@ scripts/smart_scale_service.py      常驻称重触发服务
 scripts/predict_rknn_detector.py    RKNN YOLO 检测推理和 NMS 后处理
 scripts/recognize_product_detector_rknn.py  检测结果转商品、状态和计价数据
 scripts/product_business.py         商品表、状态判断、计价和播报文本
+scripts/product_memory.py           商品记忆库：图片特征提取、记忆保存和相似度匹配
 scripts/transaction_utils.py        交易记录构建、JSONL 写入、终端收据
 scripts/device_policy.py            设备策略校验、计价模式、语音模板和应用事件
 scripts/mqtt_publisher.py           MQTT 发布、主题推导、交易和事件上报
@@ -392,7 +409,8 @@ python -m pytest -q tests
 4. 放上苹果、香蕉或橙子，等待设备自动识别、称重、计价和播报。
 5. 在 Web 后台查看交易流水、统计分析和设备事件。
 6. 对低置信度或未知商品使用 Web/手机语音输入“这是苹果”“改成番茄”等完成修正。
-7. 在 Web 后台查看修正后的交易详情、策略版本和设备事件回传。
+7. 板端收到 `bind_memory` 后生成商品记忆；再次放上相似未知商品时，可自动进入 `memory_matched`。
+8. 在 Web 后台查看修正后的交易详情、商品记忆来源、策略版本和设备事件回传。
 
 ## 开发过程
 

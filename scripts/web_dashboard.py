@@ -557,6 +557,16 @@ class DashboardHandler(BaseHTTPRequestHandler):
                         "operator": "voice_mobile",
                         "note": f"手机语音补盲：{text}",
                     })
+                    bind_payload = {
+                        "request_id": uuid4().hex,
+                        "command": "bind_memory",
+                        "source": source,
+                        "recognized_text": text,
+                        "transaction_id": updated.get("transaction_id"),
+                        "product_id": intent["product_id"],
+                        "timestamp": datetime.now().isoformat(timespec="seconds"),
+                    }
+                    bind_response = publish_voice_payload(self.mqtt_config_path, bind_payload)
                     speech_text = build_correction_speech(updated)
                     payload = {
                         "request_id": uuid4().hex,
@@ -572,6 +582,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                         "intent": intent,
                         "transaction_id": updated.get("transaction_id"),
                         "updated": updated,
+                        "memory_bind": bind_response,
                         "speech_text": speech_text,
                         "request_id": payload["request_id"],
                     })
@@ -589,6 +600,18 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     raise ValueError("Request body must be an object")
                 transaction_id = str(data.get("transaction_id", "")).strip()
                 updated = update_transaction_record(self.records_path, self.products_path, transaction_id, data)
+                bind_payload = {
+                    "request_id": uuid4().hex,
+                    "command": "bind_memory",
+                    "source": str(data.get("operator") or "web_dashboard"),
+                    "transaction_id": updated.get("transaction_id"),
+                    "product_id": updated.get("product_id"),
+                    "timestamp": datetime.now().isoformat(timespec="seconds"),
+                }
+                try:
+                    updated["product_memory"]["bind_command"] = publish_voice_payload(self.mqtt_config_path, bind_payload)
+                except Exception as exc:
+                    updated["product_memory"]["bind_command"] = {"error": str(exc)}
                 self.send_json(updated)
             except Exception as exc:
                 self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)

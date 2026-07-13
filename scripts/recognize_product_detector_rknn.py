@@ -8,6 +8,7 @@ from pathlib import Path
 
 from predict_rknn_detector import RKNNDetector, predict_rknn_detections
 from product_business import build_status, build_voice_text, format_money, load_products
+from product_memory import DEFAULT_MEMORY_PATH, match_product_memory
 
 
 # 同一商品被 YOLO 多次检测到时，只保留置信度最高的那一个（按 product_id 去重）
@@ -40,6 +41,9 @@ def recognize_product_detector_rknn(
     max_det: int = 20,
     score_sigmoid: bool = False,
     detector: RKNNDetector | None = None,
+    memory_path: Path = DEFAULT_MEMORY_PATH,
+    memory_threshold: float = 0.88,
+    memory_gap: float = 0.03,
 ) -> dict:
     products = load_products(products_path)
     if detector is None:
@@ -96,8 +100,27 @@ def recognize_product_detector_rknn(
                 "unit_price": 0.0,
             }
 
+    memory_match = None
+    if status in {"unknown", "low_confidence", "needs_confirm"}:
+        try:
+            memory_match = match_product_memory(
+                image_path=image_path,
+                products=products,
+                memory_path=memory_path,
+                threshold=memory_threshold,
+                gap_threshold=memory_gap,
+            )
+        except Exception as exc:
+            memory_match = {"source": "product_memory", "status": "error", "error": str(exc)}
+        if memory_match and memory_match.get("status") == "matched":
+            product_id = str(memory_match["product_id"])
+            product = products[product_id]
+            status = "memory_matched"
+            confidence = float(memory_match.get("similarity") or confidence)
+            confidence_gap = float(memory_match.get("similarity_gap") or 0.0)
+
     weight_jin = weight_g / 500.0 if weight_g is not None else None
-    total_price = weight_jin * float(product["unit_price"]) if status == "accepted" and weight_jin is not None else None
+    total_price = weight_jin * float(product["unit_price"]) if status in {"accepted", "memory_matched"} and weight_jin is not None else None
     voice_text = build_voice_text(product, confidence, weight_g, total_price, status)
 
     return {
@@ -114,6 +137,9 @@ def recognize_product_detector_rknn(
         "voice_text": voice_text,
         "top_predictions": [{"product_id": label, "confidence": round(float(score), 4)} for label, score in predictions],
         "detections": product_detections,
+        "recognition_source": "product_memory" if status == "memory_matched" else "detector",
+        "memory_match": memory_match if memory_match and memory_match.get("status") == "matched" else None,
+        "memory_lookup": memory_match if memory_match and memory_match.get("status") == "error" else None,
         "detector": {
             "has_box": bool(product_detections),
             "raw_detection_count": len(detections),
@@ -143,6 +169,9 @@ def main() -> int:
     parser.add_argument("--iou", type=float, default=0.45, help="NMS IoU threshold.")
     parser.add_argument("--max-det", type=int, default=20, help="Maximum detections after NMS.")
     parser.add_argument("--score-sigmoid", action="store_true", help="Apply sigmoid to output scores before filtering.")
+    parser.add_argument("--memory", default=str(DEFAULT_MEMORY_PATH), help="Product memory JSONL path.")
+    parser.add_argument("--memory-threshold", type=float, default=0.88, help="Minimum product memory similarity.")
+    parser.add_argument("--memory-gap", type=float, default=0.03, help="Minimum similarity gap between top memory matches.")
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON only.")
     args = parser.parse_args()
 
@@ -162,6 +191,9 @@ def main() -> int:
         iou_threshold=args.iou,
         max_det=args.max_det,
         score_sigmoid=args.score_sigmoid,
+        memory_path=Path(args.memory),
+        memory_threshold=args.memory_threshold,
+        memory_gap=args.memory_gap,
     )
 
     if args.json:

@@ -3,6 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import cv2
+import numpy as np
+
 import pytest
 
 from device_policy import apply_policy_to_record, calculate_policy_price, load_policy, normalize_policy
@@ -14,7 +17,16 @@ from mqtt_publisher import (
     load_mqtt_config,
 )
 from product_business import build_status, build_voice_text, format_money, load_products
+from product_memory import add_product_memory, match_product_memory
+from recognize_product_detector_rknn import recognize_product_detector_rknn
 from transaction_utils import append_jsonl, build_transaction
+from voice_command_mqtt import run_bind_memory
+
+
+def write_test_image(path: Path, image: np.ndarray) -> None:
+    ok, encoded = cv2.imencode(path.suffix or ".jpg", image)
+    assert ok
+    encoded.tofile(str(path))
 
 
 def test_build_status_rules():
@@ -121,3 +133,104 @@ def test_normalize_policy_fills_defaults():
     assert policy["policy_version"]
     assert policy["pricing_mode"] == "standard"
     assert policy["enabled"] is True
+
+
+def test_product_memory_add_and_match(tmp_path: Path):
+    image_path = tmp_path / "tomato.jpg"
+    image = np.full((120, 120, 3), (20, 20, 220), dtype=np.uint8)
+    write_test_image(image_path, image)
+    memory_path = tmp_path / "product_memory.jsonl"
+    product = {"name": "番茄", "unit": "斤", "unit_price": 5.8, "enabled": True}
+    record = {
+        "transaction_id": "tx-memory",
+        "source_image": str(image_path),
+        "detections": [],
+    }
+
+    item = add_product_memory(memory_path, record, "tomato", product)
+    assert item["product_id"] == "tomato"
+    assert memory_path.exists()
+
+    match = match_product_memory(
+        image_path,
+        {"tomato": product},
+        memory_path=memory_path,
+        threshold=0.8,
+        gap_threshold=0.0,
+    )
+    assert match
+    assert match["product_id"] == "tomato"
+    assert match["source"] == "product_memory"
+
+
+def test_recognition_uses_product_memory_when_detector_unknown(tmp_path: Path):
+    image_path = tmp_path / "pear.jpg"
+    image = np.full((120, 120, 3), (30, 180, 80), dtype=np.uint8)
+    write_test_image(image_path, image)
+
+    products_path = tmp_path / "products.json"
+    products_path.write_text(
+        json.dumps({"pear": {"name": "梨", "unit": "斤", "unit_price": 6.0, "enabled": True}}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    memory_path = tmp_path / "product_memory.jsonl"
+    add_product_memory(
+        memory_path,
+        {"transaction_id": "seed", "source_image": str(image_path), "detections": []},
+        "pear",
+        {"name": "梨", "unit": "斤", "unit_price": 6.0, "enabled": True},
+    )
+
+    class EmptyDetector:
+        def predict_image(self, *args, **kwargs):
+            return []
+
+    result = recognize_product_detector_rknn(
+        image_path=image_path,
+        model_path=tmp_path / "unused.rknn",
+        products_path=products_path,
+        labels_path=tmp_path / "unused.labels.json",
+        weight_g=500,
+        detector=EmptyDetector(),
+        memory_path=memory_path,
+        memory_threshold=0.8,
+        memory_gap=0.0,
+    )
+    assert result["status"] == "memory_matched"
+    assert result["product_id"] == "pear"
+    assert result["total_price"] == 6.0
+    assert result["recognition_source"] == "product_memory"
+
+
+def test_bind_memory_command_creates_edge_memory(tmp_path: Path):
+    image_path = tmp_path / "orange.jpg"
+    image = np.full((120, 120, 3), (30, 120, 240), dtype=np.uint8)
+    write_test_image(image_path, image)
+    records_path = tmp_path / "transactions.jsonl"
+    products_path = tmp_path / "products.json"
+    memory_path = tmp_path / "product_memory.jsonl"
+    products_path.write_text(
+        json.dumps({"orange": {"name": "橙子", "unit": "斤", "unit_price": 7.8, "enabled": True}}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    append_jsonl(records_path, {
+        "transaction_id": "tx-bind",
+        "timestamp": "2026-07-13T10:00:00",
+        "source_image": str(image_path),
+        "detections": [],
+    })
+
+    class Args:
+        records = str(records_path)
+        products = str(products_path)
+        product_memory = str(memory_path)
+
+    code, response, extra = run_bind_memory(Args, {"transaction_id": "tx-bind", "product_id": "orange"})
+    assert code == 0
+    assert "橙子" in response
+    assert extra["product_id"] == "orange"
+    assert memory_path.exists()
+    saved = [json.loads(line) for line in memory_path.read_text(encoding="utf-8").splitlines()]
+    assert saved[0]["transaction_id"] == "tx-bind"
+    records = [json.loads(line) for line in records_path.read_text(encoding="utf-8").splitlines()]
+    assert records[0]["product_memory"]["saved"] is True

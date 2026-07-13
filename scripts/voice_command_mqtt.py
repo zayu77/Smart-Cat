@@ -13,6 +13,8 @@ from uuid import uuid4
 
 from device_policy import append_device_event, build_device_event, load_policy
 from mqtt_publisher import derive_voice_command_topic, load_mqtt_config, publish_device_event
+from product_business import load_products
+from product_memory import DEFAULT_MEMORY_PATH, add_product_memory
 from transaction_utils import append_jsonl
 from tts_output import speak_text as tts_speak_text
 from voice_accessibility import runtime_tts_defaults
@@ -20,8 +22,8 @@ from voice_accessibility import runtime_tts_defaults
 
 # 项目根路径常量：用于子进程 cwd 和脚本定位
 ROOT = Path(__file__).resolve().parents[1]
-# 板子端允许响应的命令白名单：6 个查询命令 + 1 个直说模式（speak_text）
-ALLOWED_COMMANDS = {"status", "weight", "latest", "price", "pending", "help", "speak_text"}
+# 板子端允许响应的命令白名单：查询命令 + 直说模式 + 商品记忆绑定
+ALLOWED_COMMANDS = {"status", "weight", "latest", "price", "pending", "help", "speak_text", "bind_memory"}
 
 
 # 规范化 MQTT payload 里的命令：去空格 + 小写 + 别名映射 + 白名单校验（不在白名单抛错）
@@ -96,6 +98,81 @@ def run_direct_speech(args, payload: dict) -> tuple[int, str]:
     return 0, text
 
 
+def load_jsonl_records(path: Path) -> list[dict]:
+    records = []
+    if not path.exists():
+        return records
+    with path.open("r", encoding="utf-8") as file:
+        for line in file:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                item = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(item, dict):
+                records.append(item)
+    return records
+
+
+def save_jsonl_records(path: Path, records: list[dict]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as file:
+        for record in records:
+            file.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
+def find_transaction(records: list[dict], transaction_id: str) -> dict | None:
+    for record in reversed(records):
+        if str(record.get("transaction_id") or "") == transaction_id:
+            return record
+    return None
+
+
+# 板端商品记忆绑定：Web 后台只下发 transaction_id/product_id，真正读图和提特征在板端完成
+def run_bind_memory(args, payload: dict) -> tuple[int, str, dict]:
+    transaction_id = str(payload.get("transaction_id") or "").strip()
+    product_id = str(payload.get("product_id") or "").strip()
+    if not transaction_id:
+        raise ValueError("bind_memory requires transaction_id")
+    if not product_id:
+        raise ValueError("bind_memory requires product_id")
+
+    products = load_products(Path(args.products))
+    if product_id not in products:
+        raise ValueError(f"Unknown product_id for memory binding: {product_id}")
+
+    records_path = Path(args.records)
+    records = load_jsonl_records(records_path)
+    record = find_transaction(records, transaction_id)
+    if record is None:
+        raise ValueError(f"Transaction not found on edge device: {transaction_id}")
+
+    memory_item = add_product_memory(
+        memory_path=Path(args.product_memory),
+        record=record,
+        product_id=product_id,
+        product=dict(products[product_id]),
+        root=ROOT,
+    )
+    record["product_memory"] = {
+        "saved": True,
+        "memory_id": memory_item.get("memory_id"),
+        "feature_version": memory_item.get("feature_version"),
+        "saved_at": memory_item.get("created_at"),
+        "source": "edge_bind_memory",
+    }
+    save_jsonl_records(records_path, records)
+    response = f"已为{products[product_id].get('name', product_id)}保存商品记忆。"
+    return 0, response, {
+        "memory_id": memory_item.get("memory_id"),
+        "product_id": product_id,
+        "transaction_id": transaction_id,
+        "feature_version": memory_item.get("feature_version"),
+    }
+
+
 # 把命令结果写设备事件：本地 JSONL 必写，--no-event-publish 决定是否 MQTT 推回云端
 def publish_command_event(args, command: str, payload: dict, status: str, message: str, extra: dict | None = None) -> None:
     try:
@@ -134,6 +211,8 @@ def main() -> int:
     parser.add_argument("--device-policy", default="config/device_policy.json", help="Device policy JSON path.")
     parser.add_argument("--service-status", default="records/service_status.json", help="Service status JSON path.")
     parser.add_argument("--records", default="records/transactions.jsonl", help="Transaction JSONL path.")
+    parser.add_argument("--products", default="config/products.json", help="Products JSON path.")
+    parser.add_argument("--product-memory", default=str(DEFAULT_MEMORY_PATH), help="Product memory JSONL path.")
     parser.add_argument("--command-log", default="records/voice_commands.jsonl", help="Voice command log JSONL path.")
     parser.add_argument("--events", default="records/device_events.jsonl", help="Device events JSONL path.")
     parser.add_argument("--device-id", default="lubancat3_demo_001", help="Fallback device ID.")
@@ -172,8 +251,12 @@ def main() -> int:
             command = normalize_command(payload)
             if command == "speak_text":
                 code, response = run_direct_speech(args, payload)
+                extra = {}
+            elif command == "bind_memory":
+                code, response, extra = run_bind_memory(args, payload)
             else:
                 code, response = run_voice_command(args, command)
+                extra = {}
             ok = code == 0
             print(f"Voice command: {command} exit={code} response={response}")
             publish_command_event(
@@ -182,7 +265,7 @@ def main() -> int:
                 payload,
                 "success" if ok else "failed",
                 response or f"Voice command {command} finished with exit code {code}.",
-                {"exit_code": code, "response": response},
+                {"exit_code": code, "response": response, **extra},
             )
         except Exception as exc:
             print(f"Voice command failed: {exc}")

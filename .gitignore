@@ -47,3 +47,7 @@ yolo11*-cls.pt
 交付材料*.zip
 交付材料*.rar
 docs/考核要求.md
+
+# Local presentation files
+*.ppt
+*.pptx

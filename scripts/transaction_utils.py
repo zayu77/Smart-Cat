@@ -43,6 +43,9 @@ def build_transaction(recognition: dict, image_path: Path, device_id: str) -> di
         "voice_text": recognition["voice_text"],
         "top_predictions": recognition["top_predictions"],
         "detections": recognition.get("detections", []),
+        "recognition_source": recognition.get("recognition_source", "detector"),
+        "memory_match": recognition.get("memory_match"),
+        "memory_lookup": recognition.get("memory_lookup"),
         "detector": recognition.get("detector", {}),
     }
 

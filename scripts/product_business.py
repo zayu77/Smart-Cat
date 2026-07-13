@@ -43,6 +43,8 @@ def build_voice_text(product: dict, confidence: float, weight_g: float | None, t
         return "未检测到有效商品，请人工确认。"
     if status == "rejected":
         return "当前商品未能可靠识别，已暂停结算，请人工处理。"
+    if status == "memory_matched":
+        name = product.get("voice_name") or product.get("name")
 
     if weight_g is None or total_price is None:
         return f"{name}，单价{unit_price}元每{unit}。"

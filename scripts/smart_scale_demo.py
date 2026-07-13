@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import time
 from pathlib import Path
 
@@ -307,6 +308,13 @@ def run_transaction(
     )
 
     record = build_transaction(recognition, image_path=image_path, device_id=args.device_id)
+    transaction_image_path = Path("outputs/transactions") / f"{record['transaction_id']}.jpg"
+    try:
+        transaction_image_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(image_path, transaction_image_path)
+        record["source_image"] = str(transaction_image_path)
+    except Exception as exc:
+        record["source_image_error"] = str(exc)
     apply_policy_to_record(record, device_policy)
     record["camera"] = {
         "device": args.device,

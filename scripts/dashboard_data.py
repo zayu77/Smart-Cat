@@ -20,7 +20,7 @@ DEFAULT_POLICY_HISTORY = ROOT / "records" / "policy_history.jsonl"
 DEFAULT_PRODUCTS = ROOT / "config" / "products.json"
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 PRODUCT_UNITS = {"斤", "kg"}
-FINAL_SALE_STATUSES = {"accepted", "manually_confirmed"}
+FINAL_SALE_STATUSES = {"accepted", "manually_confirmed", "memory_matched"}
 
 # 读 JSON 文件：不存在时返回调用方给的 fallback（空 dict/空 list），不抛 FileNotFoundError
 def load_json(path: Path, fallback):
@@ -585,6 +585,7 @@ def correction_snapshot(record: dict) -> dict:
         "unit_price",
         "total_price",
         "voice_text",
+        "recognition_source",
     ]
     return {key: record.get(key) for key in keys}
 
@@ -626,7 +627,13 @@ def update_transaction_record(records_path: Path, products_path: Path, transacti
             "unit_price": unit_price,
             "total_price": total_price,
             "voice_text": build_voice_text(product, float(record.get("confidence") or 0), weight_g, total_price, "accepted"),
+            "recognition_source": "manual_confirmation",
         })
+        record["product_memory"] = {
+            "saved": False,
+            "binding": "pending_edge_bind",
+            "message": "已在后台完成交易修正，等待板端 bind_memory 命令生成商品记忆。",
+        }
         corrections = record.setdefault("corrections", [])
         corrections.append({
             "timestamp": datetime.now().isoformat(timespec="seconds"),
@@ -634,6 +641,10 @@ def update_transaction_record(records_path: Path, products_path: Path, transacti
             "note": note,
             "before": before,
             "after": correction_snapshot(record),
+            "product_memory": {
+                "saved": False,
+                "binding": "pending_edge_bind",
+            },
         })
         updated_record = record
 
